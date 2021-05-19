@@ -14,10 +14,9 @@ from wandb.keras import WandbCallback
 #set of hyperparameters to be tuned during the sweep
 
 default_parameters = dict(
-    embedding_size = 32,
+    embedding_size = 64,
     batch_size = 32,
-    num_enc_layers = 2,
-    num_dec_layers = 1,
+    num_layers = 2,
     hidden_layer_size = 64,
     cell_type = 'LSTM',
     dropout = 0.2,
@@ -77,8 +76,7 @@ for line in lines[:len(lines) - 1]:
     val_X.append(input_text)
     val_Y.append(target_text)
     
-    
-    
+
 input_char_index = dict([(char, i) for i, char in enumerate(input_corpus)])
 output_char_index = dict([(char, i) for i, char in enumerate(output_corpus)])
 
@@ -120,113 +118,110 @@ for i, (x, y) in enumerate(zip(val_X, val_Y)):
             
     decoder_input_data_val[i, t + 1 :, output_char_index[" "]] = 1.0
     decoder_target_data_val[i, t:, output_char_index[" "]] = 1.0
-    
-    
-    
-def training_model(embedding_size,num_enc_layers,num_dec_layers, hidden_layer_size, cell_type, dropout, 
-                   num_encoder_tokens,num_decoder_tokens):
-    
+
+
+def training_model(embedding_size, num_enc_layers, num_dec_layers, hidden_layer_size, cell_type, dropout,
+                   num_encoder_tokens, num_decoder_tokens):
     if cell_type == 'LSTM':
+
         encoder_inputs = Input(shape=(None,))
         encoder_embedded = layers.Embedding(input_dim=num_encoder_tokens, output_dim=embedding_size)(encoder_inputs)
         x_e = encoder_embedded
 
-        for i in range(num_enc_layers-1):
-            x_e = LSTM(hidden_layer_size, return_state=True, return_sequences=True,dropout=dropout,
-                      name = 'encoder_LSTM_'+str(i+1))(x_e)
+        encoder_states = []
 
-        encoder_outputs, state_h, state_c = LSTM(hidden_layer_size, return_state=True, dropout=dropout,
-                                                name = 'encoder_LSTM_'+str(num_enc_layers))(x_e)
+        for i in range(num_enc_layers):
+            x_e, state_h_e, state_c_e = LSTM(hidden_layer_size, return_state=True, return_sequences=True,
+                                             dropout=dropout,
+                                             name='encoder_LSTM_' + str(i + 1))(x_e)
+            encoder_states += [state_h_e, state_c_e]
 
-        encoder_states = [state_h, state_c]
+        encoder_output = x_e
 
         decoder_inputs = Input(shape=(None, num_decoder_tokens))
         x_d = decoder_inputs
 
-        x_d = LSTM(hidden_layer_size, return_sequences=True, return_state=True,dropout=dropout,
-                   name = 'decoder_LSTM_'+str(1))(x_d,initial_state=encoder_states)
-        for i in range(num_dec_layers-1):
-            x_d = LSTM(hidden_layer_size, return_sequences=True, return_state=True,dropout=dropout,
-                      name = 'decoder_LSTM_'+str(i+2))(x_d)
+        for i in range(num_dec_layers):
+            x_d, state_h_d, state_c_d = LSTM(hidden_layer_size, return_sequences=True, return_state=True,
+                                             dropout=dropout,
+                                             name='decoder_LSTM_' + str(i + 1))(x_d, initial_state=encoder_states[
+                                                                                                   2 * i:2 * (i + 1)])
 
-        decoder_outputs, _, _ = x_d
+        decoder_outputs = x_d
         decoder_dense = Dense(num_decoder_tokens, activation="softmax")
         decoder_outputs = decoder_dense(decoder_outputs)
 
         model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
-        
-        
+
+
     elif cell_type == 'GRU':
+
         encoder_inputs = Input(shape=(None,))
         encoder_embedded = layers.Embedding(input_dim=num_encoder_tokens, output_dim=embedding_size)(encoder_inputs)
         x_e = encoder_embedded
 
-        for i in range(num_enc_layers-1):
-            x_e = GRU(hidden_layer_size, return_state=True, return_sequences=True,dropout=dropout,
-                     name = 'encoder_GRU_'+str(i+1))(x_e)
+        encoder_states = []
 
-        encoder_outputs, state_c = GRU(hidden_layer_size, return_state=True, dropout=dropout,
-                                       name = 'encoder_GRU_'+str(num_enc_layers))(x_e)
+        for i in range(num_enc_layers):
+            x_e, state_c_e = GRU(hidden_layer_size, return_state=True, return_sequences=True, dropout=dropout,
+                                 name='encoder_GRU_' + str(i + 1))(x_e)
+            encoder_states += [state_c_e]
 
-        encoder_states = [state_c]
+        encoder_output = x_e
 
         decoder_inputs = Input(shape=(None, num_decoder_tokens))
         x_d = decoder_inputs
 
-        x_d = GRU(hidden_layer_size, return_sequences=True, return_state=True,dropout=dropout,
-                 name = 'decoder_GRU_'+str(1))(x_d,initial_state=encoder_states)
-        for i in range(num_dec_layers-1):
-            x_d = GRU(hidden_layer_size, return_sequences=True, return_state=True,dropout=dropout,
-                     name = 'decoder_GRU_'+str(i+2))(x_d)
+        for i in range(num_dec_layers):
+            x_d, state_c_d = GRU(hidden_layer_size, return_sequences=True, return_state=True, dropout=dropout,
+                                 name='decoder_GRU_' + str(i + 1))(x_d, initial_state=encoder_states[i])
 
-        decoder_outputs, _ = x_d
+        decoder_outputs = x_d
         decoder_dense = Dense(num_decoder_tokens, activation="softmax")
         decoder_outputs = decoder_dense(decoder_outputs)
 
         model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
-    
+
     elif cell_type == 'RNN':
+
         encoder_inputs = Input(shape=(None,))
         encoder_embedded = layers.Embedding(input_dim=num_encoder_tokens, output_dim=embedding_size)(encoder_inputs)
         x_e = encoder_embedded
 
-        for i in range(num_enc_layers-1):
-            x_e = SimpleRNN(hidden_layer_size, return_state=True, return_sequences=True,dropout=dropout,
-                            name = 'encoder_RNN_'+str(i+1))(x_e)
+        encoder_states = []
 
-        encoder_outputs, state_c = SimpleRNN(hidden_layer_size, return_state=True, dropout=dropout,
-                                             name = 'encoder_RNN_'+str(num_enc_layers))(x_e)
+        for i in range(num_enc_layers):
+            x_e, state_c_e = SimpleRNN(hidden_layer_size, return_state=True, return_sequences=True, dropout=dropout,
+                                       name='encoder_RNN_' + str(i + 1))(x_e)
+            encoder_states += [state_c_e]
 
-        encoder_states = [state_c]
+        encoder_output = x_e
 
         decoder_inputs = Input(shape=(None, num_decoder_tokens))
         x_d = decoder_inputs
 
-        x_d = SimpleRNN(hidden_layer_size, return_sequences=True, return_state=True,dropout=dropout,
-                       name = 'decoder_RNN_'+str(1))(x_d,initial_state=encoder_states)
-        for i in range(num_dec_layers-1):
-            x_d = SimpleRNN(hidden_layer_size, return_sequences=True, return_state=True,dropout=dropout,
-                           name = 'decoder_RNN_'+str(i+2))(x_d)
+        for i in range(num_dec_layers):
+            x_d, state_c_d = SimpleRNN(hidden_layer_size, return_sequences=True, return_state=True, dropout=dropout,
+                                       name='decoder_RNN_' + str(i + 1))(x_d, initial_state=encoder_states[i])
 
-        decoder_outputs, _ = x_d
+        decoder_outputs = x_d
         decoder_dense = Dense(num_decoder_tokens, activation="softmax")
         decoder_outputs = decoder_dense(decoder_outputs)
 
-        model = Model([encoder_inputs, decoder_inputs], decoder_outputs)        
-        
-    
-    return model
+        model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
 
+    return model
 
 embedding_size = config.embedding_size
 batch_size = config.batch_size
-num_enc_layers = config.num_enc_layers
-num_dec_layers = config.num_dec_layers
+num_layers = config.num_layers
 hidden_layer_size = config.hidden_layer_size
 cell_type = config.cell_type
 dropout = config.dropout
 epochs = config.epochs
 
+num_enc_layers = num_layers
+num_dec_layers = num_layers
 
 model = training_model(embedding_size, num_enc_layers,num_dec_layers, hidden_layer_size, cell_type, dropout,
                    num_encoder_tokens,num_decoder_tokens)

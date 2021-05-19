@@ -5,19 +5,17 @@ metric:
   name: val_accuracy
 parameters:
   embedding_size:
-    values: [16, 32, 64]
+    values: [16, 32, 64, 256]
   batch_size:
     values: [16, 32, 64]
-  num_enc_layers:
-    values: [1, 2, 3, 4]
-  num_sec_layers:
-    values: [1]
+  num_layers:
+    values: [1, 2, 3]
   hidden_layer_size:
-    values: [32, 64, 128]
+    values: [16, 32, 64, 256]
   cell_type:
     values: ['LSTM', 'GRU', 'RNN']
   dropout:
-    values: [0.0, 0.1, 0.2, 0.3, 0.4]
+    values: [0.0, 0.1, 0.2, 0.3]
   epochs:
     values: [10, 15, 20]
 
